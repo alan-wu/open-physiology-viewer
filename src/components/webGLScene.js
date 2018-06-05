@@ -130,6 +130,7 @@ export class WebGLSceneComponent {
     controls;
     mouse;
     windowResize;
+    _selectedCallback = undefined;
 
     _highlighted = null;
     _selected    = null;
@@ -172,7 +173,13 @@ export class WebGLSceneComponent {
         this.highlight(obj, this.selectColor, obj !== this.highlighted);
         this._selected = obj;
         this._selectedLyphName = obj && obj.__data && (obj.__data.constructor.name === Lyph.name)? obj.__data.name: "";
+        if (this._selectedCallback)
+          this._selectedCallback(obj);
         this.selectedItemChange.emit(obj);
+    }
+    
+    set selectedCallback(callbackObj){
+      this._selectedCallback = callbackObj;
     }
 
     /**
@@ -202,6 +209,8 @@ export class WebGLSceneComponent {
         this._labels       = {Node: "id", Link: "id", Lyph: "id"};
 
         this._hideGroups = new Set();
+        
+        global['lyphViewerScene'] = {component: this};
     }
 
     ngAfterViewInit() {
