@@ -99,15 +99,15 @@ function getBoundaryPoint (line, boundaryLinks){
  *  coordinates of the intersection point and whether the point is on the first or second line
  */
 function getLineIntersection(line1, line2) {
-    let denominator, a, b, numerator1, numerator2;
+    let denominator, a, b, numerator1;//, numerator2;
     denominator = ((line2.target.y - line2.source.y) * (line1.target.x - line1.source.x)) - ((line2.target.x - line2.source.x) * (line1.target.y - line1.source.y));
     if (denominator === 0) { return }
     a = line1.source.y - line2.source.y;
     b = line1.source.x - line2.source.x;
     numerator1 = ((line2.target.x - line2.source.x) * a) - ((line2.target.y - line2.source.y) * b);
-    numerator2 = ((line1.target.x - line1.source.x) * a) - ((line1.target.y - line1.source.y) * b);
     a = numerator1 / denominator;
-    b = numerator2 / denominator;
+    //numerator2 = ((line1.target.x - line1.source.x) * a) - ((line1.target.y - line1.source.y) * b);
+    //b = numerator2 / denominator;
     return {
         x: line1.source.x + (a * (line1.target.x - line1.source.x)),
         y: line1.source.y + (a * (line1.target.y - line1.source.y))
@@ -115,19 +115,38 @@ function getLineIntersection(line1, line2) {
 }
 
 /**
- *
- * @param source - link source coordinates
- * @param target - link target coordinates
- * @param point - point coordinates
- * @returns {{x: *, y: *}} orthogonal projection of he point to the link
+ * Simple object check.
+ * @param item
+ * @returns {boolean}
  */
-function getSpPoint({source: source, target: target}, point){
-    let x1 = source.x, y1 = source.y, x2 = target.x, y2 = target.y, x3 = point.x, y3 = point.y;
-    let px = x2 - x1, py = y2 - y1, dAB = px * px + py * py;
-    let u = ((x3 - x1) * px + (y3 - y1) * py) / dAB;
-    let x = x1 + u * px, y = y1 + u * py;
-    return {x: x, y: y};
+export function isObject(item) {
+    return (item && typeof item === 'object' && !Array.isArray(item));
 }
+
+/**
+ * Deep merge two objects.
+ * @param target
+ * @param ...sources
+ */
+export function mergeDeep(target, ...sources) {
+    if (!sources.length) return target;
+    const source = sources.shift();
+
+    if (isObject(target) && isObject(source)) {
+        for (const key in source) {
+            if (isObject(source[key])) {
+                if (!target[key]) Object.assign(target, { [key]: {} });
+                mergeDeep(target[key], source[key]);
+            } else {
+                Object.assign(target, { [key]: source[key] });
+            }
+        }
+    }
+
+    return mergeDeep(target, ...sources);
+}
+
+
 
 
 

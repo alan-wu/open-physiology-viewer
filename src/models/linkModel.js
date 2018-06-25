@@ -17,6 +17,7 @@ export const LINK_TYPES = {
     LINK       : "link",       //solid straight line
     DASHED     : "dashed",     //dashed straight line
     SEMICIRCLE : "semicircle", //solid line in the form of a semicircle
+    PATH       : "path",       //solid path (e.g., in the shape for the edge bundling)
     CONTAINER  : "container",  //link with visual object (which may be hidden), not affected by graph forces (i.e., with fixed position)
     FORCE      : "force",      //link without visual object, works as force to attract or repel nodes
     INVISIBLE  : "invisible"   //link with hidden visual object affected by graph forces (i.e., dynamically positioned)
@@ -35,29 +36,6 @@ export class Link extends Entity {
             return direction({source: this.target, target: this.source});
         }
         return direction({source: this.source, target: this.target});
-    }
-
-    /**
-     * Defines size of the conveying lyph based on the length of the link
-     * @returns {{height: number, width: number}}
-     */
-    get lyphSize(){
-        if (this.type === LINK_TYPES.INVISIBLE){
-            return {height: this.length, width: this.length};
-        }
-
-        const scaleFactor = (this.length? Math.log(this.length): 1) * 5;
-        let res = {height: scaleFactor, width: scaleFactor};
-        if (this.lyphScale){
-            if (this.lyphScale.width && this.lyphScale.height){
-                res.width *= this.lyphScale.width;
-                res.height *= this.lyphScale.height;
-            } else {
-                res.width  *= this.lyphScale || 1;
-                res.height *= this.lyphScale || 1;
-            }
-        }
-        return res;
     }
 
     /**
@@ -88,6 +66,7 @@ export class Link extends Entity {
                     geometry = new THREE.LineGeometry();
                     this.material = state.materialRepo.createLine2Material({
                         color: this.color,
+                        linewidth: this.linewidth,
                         polygonOffsetFactor: -100
                     });
                     obj = new THREE.Line2(geometry, this.material);
@@ -98,7 +77,8 @@ export class Link extends Entity {
                         color: this.color,
                         polygonOffsetFactor: -100
                     });
-                    let size = (this.type === LINK_TYPES.SEMICIRCLE)? state.linkResolution: 2;
+                    let size = (this.type === LINK_TYPES.SEMICIRCLE)? state.linkResolution:
+                        (this.type === LINK_TYPES.PATH)? 66: 2; // Edge bunding breaks a link into 66 points
                     geometry.addAttribute('position', new THREE.BufferAttribute(new Float32Array(size * 3), 3));
                     obj = new THREE.Line(geometry, this.material);
                 }
@@ -165,6 +145,10 @@ export class Link extends Entity {
                         copyCoords(node, pos);
                     });
                 }
+                break;
+            }
+            case LINK_TYPES.PATH: {
+                points = this.path;
                 break;
             }
         }

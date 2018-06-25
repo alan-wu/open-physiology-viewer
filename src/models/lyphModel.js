@@ -18,9 +18,6 @@ export class Lyph extends Entity {
         //Create lyph's border
         result.border.id          = result.border.id || "b_" + result.id; //derive border id from lyph's id
         result.border.borderTypes = result.border.borderTypes || [false,...this.radialBorderTypes(result.topology), false];
-        if (entitiesByID){
-
-        }
         result.border             = Border.fromJSON(result.border);
         return result;
     }
@@ -57,9 +54,23 @@ export class Lyph extends Entity {
         return res;
     }
 
+    /**
+     * Defines size of the conveying lyph based on the length of the link
+     * @returns {{height: number, width: number}}
+     */
+    get size(){
+        let res = {height: this.axis.length, width: this.axis.length};
+        res.width  *= this.scale.width / 100;
+        res.height *= this.scale.height / 100;
+        return res;
+    }
+
     translate(p0){
         let p = p0.clone();
         let transformedLyph = this.layerInLyph? this.layerInLyph: this;
+        if (this.layerInLyph){
+            p.x += this.offset;
+        }
         p.applyQuaternion(transformedLyph.viewObjects["main"].quaternion);
         p.add(transformedLyph.center);
 
@@ -209,7 +220,7 @@ export class Lyph extends Entity {
          * @returns {THREE.Mesh} - a mesh representing layer (tube, bag or cyst)
          */
         function d2Lyph(outer, material, borderMaterial){
-            let [thickness,  height,  radius,  top,  bottom] = outer;
+            let [thickness, height, radius, top, bottom] = outer;
 
             const shape = new THREE.Shape();
 
@@ -258,8 +269,8 @@ export class Lyph extends Entity {
         if (!this.axis) { return; }
 
         //Either use given dimensions or set from axis
-        this.width  = this.width  || this.axis.lyphSize.width;
-        this.height = this.height || this.axis.lyphSize.height;
+        this.width  = this.width  || this.size.width;
+        this.height = this.height || this.size.height;
 
         //There may be several objects representing a lyph, i.e., "2d" and "3d"
         this.viewObjects["lyphs"] = this.viewObjects["lyphs"] || {};
@@ -284,10 +295,10 @@ export class Lyph extends Entity {
             let thickness = this.width / numLayers;
             //The shape of the lyph depends on its position in its parent lyph as layer
             let [lyphObj, lyphBorder] = this.prev? d2Layer(
-                    [ this.width, this.height, thickness / 2, ...this.border.radialTypes],
-                    [ this.prev.width, this.prev.height, thickness / 2, ...this.prev.border.radialTypes],
-                    this.material, this.borderMaterial)
-                : d2Lyph([this.width, this.height, thickness / 2, ...this.border.radialTypes], this.material, this.borderMaterial);
+                    [ this.prev.width, this.prev.height, this.height / 4, ...this.prev.border.radialTypes],
+                    [ this.width, this.height, this.height / 4, ...this.border.radialTypes],
+                this.material, this.borderMaterial)
+                : d2Lyph([this.width, this.height, this.height / 4, ...this.border.radialTypes], this.material, this.borderMaterial);
 
             lyphObj.__data = this;
 
@@ -300,19 +311,32 @@ export class Lyph extends Entity {
             this.border.borderInLyph  = this;
             this.border.createViewObjects(state);
 
+
             //Layers
+
+            //Define proportion each layer takes
+            let resizedLayers = (this.layers || []).filter(layer => layer.layerWidth);
+            let layerTotalWidth = 0;
+            (resizedLayers||[]).forEach(layer => layerTotalWidth += layer.layerWidth);
+            let defaultWidth = (resizedLayers.length < numLayers)?
+                (100. - layerTotalWidth) / (numLayers - resizedLayers.length): 0;
+
+            //Link layers
+            for (let i = 1; i < (this.layers || []).length; i++){
+                this.layers[i].prev      = this.layers[i - 1];
+                this.layers[i].prev.next = this.layers[i];
+            }
+
+            //Draw layers
+            let offset = 0;
             (this.layers || []).forEach((layer, i) => {
-                //TODO think if we need to clone axis for layer
                 layer.axis   = this.axis;
-                layer.width  = thickness;
+                if (!layer.layerWidth) { layer.layerWidth = defaultWidth; }
+                layer.width  = layer.layerWidth / 100 * this.width;
                 layer.height = this.height;
                 layer.layerInLyph = this;
-                layer.offset = thickness * i;
-                if (i > 0) {
-                    layer.prev      = this.layers[i - 1];
-                    layer.prev.next = this.layers[i];
-                }
-
+                layer.offset = offset;
+                offset += layer.width;
                 layer.createViewObjects(state);
                 let layerObj = layer.viewObjects["main"];
                 layerObj.translateX(layer.offset);
@@ -322,16 +346,9 @@ export class Lyph extends Entity {
 
             (this.internalNodes || []).forEach(node => {
                 if (!state.graphData.nodes.find(n => n.id === node.id)){
-                    //Internal node is not in the global graph
+                    //If internal node is not in the global graph, create visual objects for it
                     node.createViewObjects(state);
                     lyphObj.add(node.viewObjects["main"]);
-                    // (node.links||[]).forEach(lnk => {
-                    //     if (!lnk.included){
-                    //         lnk.createViewObjects(state);
-                    //         state.graphScene.add(lnk.viewObjects["main"]);
-                    //         lnk.included = true;
-                    //     }
-                    // });
                 }
             })
         } else {
@@ -356,12 +373,12 @@ export class Lyph extends Entity {
         this.viewObjects['main']  = this.viewObjects["lyphs"][state.method];
 
 
-        if (!this.layerInLyph && !this.belongsToLyph) {//update label
-            if (!(this.labels[state.labels[this.constructor.name]] && this[state.labels[this.constructor.name]])) {
-                this.createViewObjects(state);
+        if (!this.layerInLyph) {//update label
+            if (!this.belongsToLyph){
+                if (!(this.labels[state.labels[this.constructor.name]] && this[state.labels[this.constructor.name]])) {
+                    this.createViewObjects(state);
+                }
             }
-        }
-        if (!this.layerInLyph){
             //update lyph
             this.viewObjects["main"].visible = (!this.hidden) && state.showLyphs;
             copyCoords(this.viewObjects["main"].position, this.center);
@@ -383,7 +400,8 @@ export class Lyph extends Entity {
                     const delta = 5;
 
                     //TODO revise for the case container is nested
-                    if (this.axis.type === LINK_TYPES.CONTAINER) {//Global force pushes content on top of lyph
+                    if (this.axis.type === LINK_TYPES.CONTAINER) {
+                        //Global force pushes content on top of lyph
                         if (Math.abs(this.axis.target.z - this.axis.source.z) <= delta) {
                             //Faster way to get projection for lyphs parallel to x-y plane
                             link.source.z = this.axis.source.z + 1;
@@ -420,16 +438,17 @@ export class Lyph extends Entity {
                             boundToPolygon(link, this.border.borderLinks); //TODO find a better way to reset links violating boundaries
                         }
                     } else {
-                        let p = {
-                            source: extractCoords(this.border.borderLinks[0].source),
-                            target: extractCoords(this.border.borderLinks[0].target)
-                        };
-                        let offset = new THREE.Vector3(
-                            ( i / N - 0.5) * this.height + link.conveyingLyph.height / 2, 0, 4);
-                        p.source.add(offset);
-                        p.target.add(offset);
-                        copyCoords(link.source, p.source);
-                        copyCoords(link.target, p.target);
+                        let p = extractCoords(this.border.borderLinks[0].source);
+                        let p1 = extractCoords(this.border.borderLinks[0].target);
+                        let p2 = extractCoords(this.border.borderLinks[1].target);
+                        [p, p1, p2].forEach(p => p.z +=1 );
+                        let dX = p1.clone().sub(p);
+                        let dY = p2.clone().sub(p1);
+                        let offsetX1 = dX.clone().multiplyScalar(i / N);
+                        let offsetX2 = dX.clone().multiplyScalar((i + 1) / N);
+                        let offsetY = dY.clone().multiplyScalar(i / N);
+                        copyCoords(link.source, p.clone().add(offsetX1).add(offsetY));
+                        copyCoords(link.target, p.clone().add(offsetX2).add(offsetY));
                     }
                 });
             }

@@ -1,10 +1,21 @@
 import { Entity } from './entityModel';
 import { values } from 'lodash-bound';
 import { LINK_TYPES } from './linkModel';
+// import { Validator} from 'jsonschema';
+// import * as schema from '../data/manifest.json';
+// const v = new Validator();
+import {ForceEdgeBundling} from "../three/d3-forceEdgeBundling";
 
 export class Graph extends Entity {
     _nodes: [];
     _links: [];
+
+    static fromJSON(json, modelClasses = {}, entitiesByID) {
+        //TODO fails with maximum stack overflow exception - either try a different validator or change schema
+        //console.log(v.validate(json, schema));
+
+        return super.fromJSON(json, modelClasses, entitiesByID);
+    }
 
     set links(newLinks){
         this._links = newLinks;
@@ -74,8 +85,29 @@ export class Graph extends Entity {
         // Update nodes positions
         this._nodes.forEach(node => { node.updateViewObjects(state) });
 
+        //Edge bundling
+        const fBundling = ForceEdgeBundling()
+            .nodes(this._nodes)
+            .edges(this.links.filter(e => e.type === LINK_TYPES.PATH).map(edge => {
+                return {
+                    source: this._nodes.indexOf(edge.source),
+                    target: this._nodes.indexOf(edge.target)
+                };
+            }));
+        let res = fBundling();
+        (res || []).forEach(path => {
+            let lnk = this._links.find(e => e.source.id === path[0].id);
+            if (lnk){
+                let dz = (path[path.length - 1].z - path[0].z) / path.length;
+                for (let i = 1; i < path.length - 1; i++){
+                    path[i].z = path[0].z + dz * i;
+                }
+                lnk.path = path;
+            }
+        });
+
         //Update links in certain order
-        [LINK_TYPES.SEMICIRCLE, LINK_TYPES.LINK, LINK_TYPES.INVISIBLE, LINK_TYPES.DASHED, LINK_TYPES.CONTAINER].forEach(
+        [LINK_TYPES.SEMICIRCLE, LINK_TYPES.LINK, LINK_TYPES.INVISIBLE, LINK_TYPES.DASHED, LINK_TYPES.CONTAINER, LINK_TYPES.PATH].forEach(
             linkType => {
                 this._links.filter(link => link.type === linkType).forEach(link => {
                     link.updateViewObjects(state);
