@@ -1,4 +1,5 @@
 import {NgModule, Component, ViewChild, ElementRef, Input, Output, EventEmitter} from '@angular/core';
+import {BrowserModule}       from '@angular/platform-browser';
 //import {StopPropagation} from './stopPropagation';
 import {CommonModule} from '@angular/common';
 import {FormsModule, ReactiveFormsModule} from '@angular/forms';
@@ -18,7 +19,6 @@ import {
 const WindowResize = require('three-window-resize');
 import {LINK_TYPES} from '../models/linkModel';
 import {NODE_TYPES} from '../models/nodeModel';
-import {Lyph} from '../models/lyphModel';
 
 import {ModelInfoPanel} from './gui/modelInfo';
 import {SelectNameSearchBar} from './gui/selectNameSearchBar';
@@ -140,6 +140,7 @@ export class WebGLSceneComponent {
 
     highlightColor = 0xff0000;
     selectColor    = 0x00ff00;
+    defaultColor   = 0x000000;
 
     graph;
     helpers = {};
@@ -172,7 +173,7 @@ export class WebGLSceneComponent {
         this.unhighlight(this._selected);
         this.highlight(obj, this.selectColor, obj !== this.highlighted);
         this._selected = obj;
-        this._selectedLyphName = obj && obj.__data && (obj.__data.constructor.name === Lyph.name)? obj.__data.name: "";
+        this._selectedLyphName = obj && obj.__data && (obj.__data.constructor.name === "Lyph")? obj.__data.name: "";
         if (this._selectedCallback)
           this._selectedCallback(obj);
         this.selectedItemChange.emit(obj);
@@ -301,9 +302,9 @@ export class WebGLSceneComponent {
         this.scene.add(gridHelper2);
         this.helpers["x-z"] = gridHelper2;
 
-        let axisHelper = new THREE.AxisHelper(510);
-        this.scene.add(axisHelper);
-        this.helpers["axis"] = axisHelper;
+        let axesHelper = new THREE.AxesHelper(510);
+        this.scene.add(axesHelper);
+        this.helpers["axis"] = axesHelper;
 
         this.togglePlanes(["x-y", "x-z", "axis"]);
     }
@@ -313,6 +314,7 @@ export class WebGLSceneComponent {
         this.graph = new ThreeForceGraph()
             .graphData(this._graphData || {});
 
+        //TODO check if setting strength is necessary
         this.graph.d3Force("x", forceX().x(d => ('x' in d.layout) ? d.layout.x : 0)
             .strength(d => ('x' in d.layout) ? ((d.type === NODE_TYPES.CORE) ? 1 : 0.5) : 0)
         );
@@ -330,6 +332,7 @@ export class WebGLSceneComponent {
             .strength(d => (d.strength ? d.strength :
                 (d.type === LINK_TYPES.CONTAINER) ? 0 : 1));
 
+        this.graph.showLabels(this._showLabels);
         this.scene.add(this.graph);
     }
 
@@ -389,18 +392,18 @@ export class WebGLSceneComponent {
     unhighlight(obj){
         // restore previous intersection object (if it exists) to its original color
         if (obj){
-            if (obj.material && obj.currentHex){
-                obj.material.color.setHex( obj.currentHex );
+            if (obj.material){
+                obj.material.color.setHex( obj.currentHex || this.defaultColor);
             }
             (obj.children || []).filter(child => child.material && child.currentHex).forEach(child => {
-                child.material.color.setHex( child.currentHex );
+                child.material.color.setHex( child.currentHex || this.defaultColor);
             })
         }
     }
 
     selectBySearchEventHandler(name) {
         if (this.graph && (name !== this._selectedLyphName)) {
-            let lyph = this._graphData.getLyphByName(name);
+            let lyph = this._graphData.lyphs(lyph => lyph.name === name);
             this.selected = lyph? lyph.viewObjects["main"]: null;
         }
     }
@@ -491,7 +494,9 @@ export class WebGLSceneComponent {
 
     toggleLabels(labelClass) {
         this._showLabels[labelClass] = !this._showLabels[labelClass];
-        this.graph.showLabels(this._showLabels);
+        if (this.graph){
+            this.graph.showLabels(this._showLabels);
+        }
     }
 
     updateLabelContent(target, property) {
@@ -511,10 +516,11 @@ export class WebGLSceneComponent {
 }
 
 @NgModule({
-    imports: [CommonModule, FormsModule, ReactiveFormsModule],
+    imports: [BrowserModule, CommonModule, FormsModule, ReactiveFormsModule],
     // I comment out stop propagation so that I can do cmd+shft+R (Hard refresh) during coding
     declarations: [WebGLSceneComponent, ModelInfoPanel, SelectNameSearchBar /*StopPropagation */],
-    exports: [WebGLSceneComponent]
+    exports: [WebGLSceneComponent],
+    bootstrap: [WebGLSceneComponent]
 })
 export class WebGLSceneModule {
 }

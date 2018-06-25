@@ -12,13 +12,6 @@ export class Border extends Entity {
         return [this.borderTypes[1], this.borderTypes[2]];
     }
 
-    get borderNodes(){
-        let res = [];
-        (this.borders || []).filter(border => border.nodes)
-            .forEach(border => res = [...res, border.nodes]);
-        return new Set(res);
-    }
-
     /**
      * Creates links (objects with fields 'source' and 'target') to define sides of the lyph rectangle
      * @returns {Array}
@@ -129,7 +122,7 @@ export class Border extends Entity {
                     "target": t,
                     "type"  : LINK_TYPES.INVISIBLE,
                     "length": this._borderLinks[i].target.distanceTo(this._borderLinks[i].source),
-                    "conveyingLyph" : state.graphData.getLyphByID(border.conveyingLyph)
+                    "conveyingLyph" : (state.graphData.lyphs).find(lyph => lyph.id === border.conveyingLyph)
                 });
 
                 this.links[i].createViewObjects(state);
@@ -145,7 +138,7 @@ export class Border extends Entity {
                     .map(p => new THREE.Vector3(p.x, p.y, 0));
                 points = points.map(p => this.borderInLyph.translate(p));
                 border.nodes.forEach((nodeID, i) => {
-                    let node = state.graphData.getNodeByID(nodeID);
+                    let node = state.graphData.nodes.find(node => node.id === nodeID);
                     if (node) { copyCoords(node, points[i + 1]); }
                 });
             }

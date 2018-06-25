@@ -1,5 +1,4 @@
 import { Entity } from './entityModel';
-import { assign } from 'lodash-bound';
 import * as three from 'three';
 const THREE = window.THREE || three;
 import { copyCoords } from '../three/utils';
@@ -18,14 +17,6 @@ export const NODE_TYPES = {
  * The class to visualize nodes in the process graphs
  */
 export class Node extends Entity {
-
-    get sourceInLinks(){
-        return this.links.filter(link => link.source && link.source.id === this.id);
-    }
-
-    get targetInLinks(){
-        return this.links.filter(link => link.target && link.target.id === this.id);
-    }
 
     /**
      * Create visual objects to represent the model according to the user preferences
@@ -71,11 +62,10 @@ export class Node extends Entity {
             }
             case NODE_TYPES.CONTROL: {
                 //Redefine position of the control node
-                let controlNodes = state.graphData.nodes.filter(node => (this.controlNodes || []).includes(node.id));
-                if (controlNodes){
+                if (this.controlNodes){
                     let middle = new THREE.Vector3(0, 0, 0);
-                    controlNodes.forEach(p => {middle.x += p.x; middle.y += p.y; middle.z += p.z});
-                    middle = middle.multiplyScalar(1.0 / (controlNodes.length || 1));
+                    this.controlNodes.forEach(p => {middle.x += p.x; middle.y += p.y; middle.z += p.z});
+                    middle = middle.multiplyScalar(1.0 / (this.controlNodes.length || 1));
                     copyCoords(this, middle.clone().multiplyScalar(2)); //double the distance from center
                 }
                 break;
