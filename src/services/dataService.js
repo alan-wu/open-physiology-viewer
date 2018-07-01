@@ -1,16 +1,14 @@
-import { core, ependymal, neural, cardiac, spt } from '../data/graph.json';
+import { core, ependymal, cardiac, spt } from '../data/graph.json';
 import { omega } from '../data/links.json'; //TODO map the data from this file into ApiNATOMY model
 
 import { assign, keys, values, cloneDeep, merge} from 'lodash-bound';
 import { schemePaired, schemeDark2, interpolateReds, interpolateGreens,
     interpolateBlues, interpolateRdPu, interpolateOranges } from 'd3-scale-chromatic';
 import { Graph } from '../models/graphModel';
-import { NODE_TYPES } from '../models/nodeModel';
 import { LINK_TYPES } from '../models/linkModel';
 import { modelClasses } from '../models/utils';
 
-const colors = [...schemePaired, schemeDark2];
-
+const colors = [...schemePaired, ...schemeDark2];
 //TODO process materials
 
 /**
@@ -42,20 +40,31 @@ export class DataService{
             e::merge({
                 "linkMethod": "Line2",
                 "linewidth" : 0.001,
-                "length": 2,
+                "length": 2
+            }));
+
+        spt.lyphs = spt.lyphs.map(e =>
+            e::merge({
                 "scale": {"width": 95, "height": 95}
             }));
 
         this._graphData = {
             id: "graph1",
-            nodes : [...core.nodes, ...ependymal.nodes, ...neural.nodes, ...spt.nodes]::cloneDeep(),
-            links : [...core.links, ...ependymal.links, ...neural.links, ...cardiac.links, ...spt.links]::cloneDeep(),
+            nodes : [...core.nodes, ...ependymal.nodes, ...spt.nodes]::cloneDeep(),
+            links : [...core.links, ...ependymal.links, ...cardiac.links, ...spt.links]::cloneDeep(),
             lyphs : [...core.lyphs, ...spt.lyphs]::cloneDeep(),
             groups: [...core.groups, ...ependymal.groups, ...spt.groups]::cloneDeep(),
             materials: [...core.materials]::cloneDeep()
         };
 
+        //Connect spinothalamic tract to the nervous system - this can be done in graph.jon
+        this._graphData.lyphs.find(e => e.id === "198")::merge({
+            internalNodes:  ["N8"],
+            border: {borders: [{}, {}, {hostedNodes: ["N7"]}, {}]}
+        });
+
         this._graphData.nodes = this._graphData.nodes.map(node => node::assign({"charge": 10}));
+
 
         let groupsByName = {};
         this._graphData.groups.forEach(g => groupsByName[g.name] = g);
@@ -153,16 +162,6 @@ export class DataService{
             if (lyph.id === "5") { return; }
             groupsByName["Neurons"].entities = [...groupsByName["Neurons"].entities, ...createInternalLyphs(lyph)];
         });
-
-        //TODO put neuron nodes and links to the group in json file
-
-        neural.nodes.forEach(node => {
-            let containerLyph = this._graphData.lyphs.find(lyph => lyph.id === node.belongsToLyph);
-            containerLyph.internalNodes = [node];
-            groupsByName["Neurons"].entities.push(node.id);
-        });
-        neural.links.forEach( link => groupsByName["Neurons"].entities.push(link.id));
-
 
         //Create Urinary tract and Cardiovascular system omega trees
 
@@ -377,6 +376,7 @@ export class DataService{
         /* Generate complete model */
 
         //Copy existing entities to a map to enable nested model instantiation
+        this._entitiesByID[this._graphData.id] = this._graphData;
         this._graphData::values().filter(prop => Array.isArray(prop)).forEach(array => array.forEach(e => {
             if (this._entitiesByID[e.id]) {
                 console.error("Entity IDs are not unique: ", this._entitiesByID[e.id], e);
@@ -384,6 +384,11 @@ export class DataService{
             this._entitiesByID[e.id] = e;
         }));
         //Schema validation
+
+        // graphEvent("event", (e) => {
+        //     console.warn(e);
+        // });
+
         this._graphData = Graph.fromJSON(this._graphData, modelClasses, this._entitiesByID);
 
         console.log("Graph data: ", this._graphData);

@@ -59,15 +59,24 @@ const recurseSchema = (className, handler) => {
     }
 };
 
+const initProperties = {"viewObjects": {}, "labels": {}};
+
 export class Entity {
     constructor(id) {
         this.id = id;
         const className = this.constructor.name;
         const handler = (currName) => this::merge(...getSchemaProperties(currName));
         recurseSchema(className, handler);
+        this::merge(initProperties);
     }
 
     static fromJSON(json, modelClasses = {}, entitiesByID = null) {
+
+        const isReference = (spec) => spec.$ref || spec.oneOf || spec.anyOf || spec.items && isReference(spec.items);
+
+        const isNestedObject = (spec) => spec.type === "object" && spec.properties || spec.items && isNestedObject(spec.items);
+
+        const getClassDefinition = (spec) => spec.$ref || (spec.oneOf || spec.anyOf || []).find(obj => obj.$ref) || spec;
 
         const createObj = (value, spec) => {
             let objValue = value;
@@ -80,7 +89,7 @@ export class Entity {
                 }
             }
 
-            let classDef = spec.$ref || spec.oneOf.find(obj => obj.$ref) || spec;
+            let classDef = getClassDefinition(spec);
             if (!classDef){
                 console.warn("Cannot extract the object class: property specification does not imply a reference", spec, value);
                 return objValue;
@@ -114,7 +123,7 @@ export class Entity {
         const res = new cls(json.id);
 
         //spec
-        let specProperties = [];
+        let specProperties = initProperties::keys();
         const handler = (currName) => specProperties = [...specProperties,
             ...definitions[currName].properties::keys()];
         recurseSchema(this.name, handler);
@@ -127,6 +136,7 @@ export class Entity {
         res::assign(json);
 
         if (entitiesByID){
+
             //Exclude just created entity from being ever created again in the following recursion
             if (!res.id) {
                 if (res.class !== "Border"){ //TODO why do borders miss ID?
@@ -140,13 +150,9 @@ export class Entity {
             }
 
             //Replace ID's with references to the model classes
-            let refFields = definitions[this.name].properties::entries().filter(([key, spec]) =>
-                spec.$ref || spec.oneOf || spec.items && (spec.items.$ref || spec.items.oneOf));
+            let refFields = definitions[this.name].properties::entries().filter(([key, spec]) => isReference(spec));
 
-            //TODO note that references in fields that do not match this pattern (such as lyph.border.borders) remain untouched
-            //TODO it may be a good idea to convert them to object references as well
-
-            refFields.forEach(([key, spec]) => {
+            const replaceRefs = (res, [key, spec]) => {
                 if (!res[key]){ return; }
                 let typeSpec = spec.items || spec;
                 if (Array.isArray(res[key])){
@@ -162,7 +168,19 @@ export class Entity {
                         res[key] = [res[key]];
                     }
                 }
-            })
+            };
+
+            refFields.forEach(f => replaceRefs(res, f));
+
+            //Replace nested objects, i.e., border = {borders: [...]};
+            let nestedRefs = definitions[this.name].properties::entries().filter(([key, spec]) => isNestedObject(spec));
+            nestedRefs.forEach(([fKey, fSpec]) => {
+                if (!res[fKey]) {return; }
+                let properties = fSpec.items? fSpec.items.properties: fSpec.properties;
+                let refFields = properties::entries().filter(([pKey, pSpec]) => isReference(pSpec));
+                //Replace nested references, which are either in an array like "borders" or in an object
+                (refFields||[]).forEach(f => [...res[fKey]].forEach(item => replaceRefs(item, f)));
+            });
         }
 
         return res;
