@@ -141,6 +141,7 @@ export class WebGLSceneComponent {
     mouse;
     windowResize;
     _selectedCallback = undefined;
+    _highlightedCallback = undefined;
 
     _highlighted = null;
     _selected    = null;
@@ -175,6 +176,8 @@ export class WebGLSceneComponent {
         }
         this.highlight(obj, this.highlightColor, obj !== this._selected);
         this._highlighted = obj;
+        if (this._highlightedCallback)
+          this._highlightedCallback(obj);
         this.highlightedItemChange.emit(obj);
     }
 
@@ -187,6 +190,10 @@ export class WebGLSceneComponent {
         if (this._selectedCallback)
           this._selectedCallback(obj);
         this.selectedItemChange.emit(obj);
+    }
+    
+    set highlightedCallback(callbackObj){
+      this._highlightedCallback = callbackObj;
     }
     
     set selectedCallback(callbackObj){
